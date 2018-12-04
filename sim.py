@@ -3,13 +3,19 @@ import math
 import numpy as np
 import random
 
-# Process positions
-CHOOSING_ORDER = "Choosing Order"
-WAITING_TO_ORDER = "Waiting to Order"
-ORDERING_SANDWICH = "Ordering Sandwich"
+# Resources
+EMPLOYEES = "EMPLOYEES"
+STATIONS = "STATIONS"
+REGISTERS = "REGISTERS"
+SANDWICH_INGREDIENTS = "SANDWICH_INGREDIENTS"
 
-WAIT_FOR_FLIP_RESOURCES = "Waiting for Flip Resources"
-FLIP_STATION = "Stations being flipped"
+# Processes
+DECIDE_ON_ORDER = "DECIDE_ON_ORDER"
+WAIT_FOR_SANDWICH_RESOURCES = "WAIT_FOR_SANDWICH_RESOURCES"
+GET_SANDWICH_INGREDIENTS = "GET_SANDWICH_INGREDIENTS"
+MAKE_WRAP_SANDWICH = "MAKE_WRAP_SANDWICH"
+WAIT_FOR_CASHIER = "WAIT_FOR_CASHIER"
+CHECKING_OUT = "CHECKING_OUT"
 
 # PROCESS 1
 # DECIDE_ON_ORDER (Delay)
@@ -38,93 +44,153 @@ FLIP_STATION = "Stations being flipped"
 
 # Each loop is in minutes
 currentTime = 0
-currentTimeDelta = 0
-
-SANDWICH_STATION_CLEANING_TIME = XXX
+simulationLength = 60 * 8
+timeDelta = 1 # Move the simulation forward in minutes
 
 # Store Details
-employees = availableEmployees = 4
-sandwichStations = availableSandwichStations = 4
-registers = availableRegisters = 1
-sandwichIngredients = 15  # 1 is all the ingredients needed for a sandwich
+employees = 4
+sandwichStations = 4
+registers = 1
 
+customers = {
+
+}
+
+# Delays
 customer_delays = {
-    CHOOSING_ORDER: (min, max),
-    WAITING_TO_ORDER: (min, max),
-    ORDERING_SANDWICH: (min, max)
+    DECIDE_ON_ORDER: {
+        "min": 1,
+        "max": 5
+    },
+    MAKE_WRAP_SANDWICH: {
+        "min": 1,
+        "max": 2
+    },
+    CHECKING_OUT: {
+        "min": 1,
+        "max": 2
+    }
 }
 
+# Seizures
 customer_seizures = {
-    WAIT_FOR_FLIP_RESOURCES: [('EMPLOYEES', 1), ('STATIONS', 2), ('SANDWICH_INGREDIENTS', -1)],
-    WAITING_TO_ORDER: [],
-    ORDERING_SANDWICH: []
+    GET_SANDWICH_INGREDIENTS: [
+        (SANDWICH_INGREDIENTS, 1)
+    ],
+    WAIT_FOR_CASHIER: [
+        (EMPLOYEES, 1)
+    ]
 }
 
+# Resources
 resources = {
-    EMPLOYEES: 4,
-    STATIONS: 4
+    EMPLOYEES: {
+        'available': 4,
+        'release': True
+    },
+    STATIONS: {
+        'available': 4,
+        'release': True
+    },
+    REGISTERS: {
+        'available': 1,
+        'release': True
+    },
+    SANDWICH_INGREDIENTS: {
+        'available': 15,
+        'release': False
+    }
 }
 
-
-def switch(option, tree):
-    if option in tree:
-        return tree[option]
-    elif "default" in tree:
-        return tree["default"]
-    else:
-        raise ValueError("NO DEFAULT ON TREE")
-
-
+# Represents a single customer
 class Customer:
     def __init__(self):
+        # Unique ID for each customer
         self.uuid = uuid.uuid1()
+
+        # The number of sandwiches the customer wants
         self.sandwiches = random.choice([i for i in range(10)])
-        self.process_position = CHOOSING_ORDER
 
-    def get_process_position(self):
-        return self.process_position
+        # The current position the customer is in 
+        self.process_position = DECIDE_ON_ORDER
 
-    def update_position(self, new_position):
-        self.process_position = new_position
+        # Set inital position
+        self.set_delay_process(DECIDE_ON_ORDER)
+
+    # Delay the customer
+    def set_delay_process(self, process_position):
+        process = customer_delays[process_position]
+
+        self.process_position = process_position
+        self.process_position_end = currentTime + random.randint( process['min'], process['max'] )
+
+# Get customers currently at a position
+def get_customers_at_position(process_position):
+    # List of customer UUIDs who are currently delayed at the position
+    customers_at_position = []
+
+    # For each customer
+    for customer in customers.values():
+       
+        # If the customer is at the correct position, add them to customers_at_position array
+        if (customer.process_position == process_position):
+            customers_at_position.append( customer.uuid )
+
+    return customers_at_position
+
+# Gets all users that have been fully delayed
+def get_delayed_customers(process_position):
+    global currentTime
+
+    delayed_customers = []
+
+    if not process_position in customer_delays:
+        print( "ERROR: Invaid delay process" )
+        exit(1)
+
+    # Customers at current position
+    customers_at_position = get_customers_at_position(process_position)
+
+    # For each customer at position
+    for customer in customers_at_position:
+        # Overwrite customer with object
+        customer = customers[customer]
+
+        # Determine if the customer has been fully delayed
+        if customer.process_position_end == currentTime:
+            delayed_customers.append( customer.uuid )
+
+    return delayed_customers
+
+# Simulate a single timestep
+def simulateTimeStep():
+    global customers, currentTime, timeDelta
+
+    # TEMP: 1/6 chance of generating customer every minute
+    if( random.randint(0, 6) == 0 ):
+        customer = Customer()
+        customers[customer.uuid] = customer
+
+    customers_decided = get_delayed_customers(DECIDE_ON_ORDER)
+    for customer in customers_decided:
+        del customers[customer]
+
+    # PROCESS 1
+    # DECIDE_ON_ORDER (Delay)
+    # WAIT_FOR_SANDWICH_RESOURCES (Seize Employee & Sandwich Station)
+    # for: each sandwich
+    # GET_SANDWICH_INGREDIENTS (Seize Sandwich ingredients)
+    # MAKE_WRAP_SANDWICH
+    # end for
+    # RELEASE_SANDWICH_MAKER_STATION (Release Employee and Sandwich Station )
+    # WAIT_FOR_CASHIER (Seize Employee)
+    # CHECKING_OUT
+    # RELEASE_CASHIER (Release Employee)
+    # <Customer Served>
+
+    # Update current time
+    currentTime += timeDelta
 
 
-def customer_seizure(process_position, customer):
-    seizures = switch(process_position, customer_seizures)
-    for seizure in seizures:
-        # Check the resource for sufficient
-        # -- on the resource until customer has seized enough
-
-    customer.seizures = seizures
-
-
-def delay_customers(customers, process_position):
-    for customer in customers:
-        delay = switch(process_position, customer_delays)
-
-
-def get_delayed_customers(process_position, waiting_since):
-    returned_customers = []
-    for customer in customers:
-        if customer.get_process_position() == process_position and customer.waiting_since > waiting_since:
-            if len(customer.seizures) > 0:
-                release()
-            returned_customers.append(customer)
-    return returned_customers
-
-
-def simulate_timestep():
-    # Get the number of customers entering the shop
-    num_customers_arriving = customer_arrivals.pop(0)
-
-    # Create new customers
-    new_customers = []
-    for i in range(num_customers_arriving):
-        new_customers.append(Customer())
-
-    customers_ready_to_order = get_delayed_customers(
-        WAITING_TO_ORDER, currentTime)
-
-    # Decide on order
-
-
-print(Customer().sandwiches)
+while(currentTime <= simulationLength):
+    simulateTimeStep()
