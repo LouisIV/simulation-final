@@ -260,19 +260,15 @@ def return_resources(process_position):
 
         globalResource['available'] += quantity
 
-# Test 1 customer
-customer = Customer()
-customers[customer.uuid] = customer
-
 # Simulate a single timestep
 def simulateTimeStep():
     global statistics, customers, currentTime, timeDelta
     print("TIME=" + str(currentTime))
 
     # TEMP: 1/6 chance of generating customer every minute
-    #if( random.randint(0, 25) == 0 ):
-    #    customer = Customer()
-    #    customers[customer.uuid] = customer
+    if( random.randint(0, 25) == 0 ):
+        customer = Customer()
+        customers[customer.uuid] = customer
 
     # For each customer that has decided: Attempt to seize resources to make sandwich
     for customer in get_delayed_customers(DECIDE_ON_ORDER):
@@ -325,8 +321,14 @@ def simulateTimeStep():
         
         customer.attempt_seize()
 
+    # For each customer that has seized sandwich ingredients: Begin sandwich making delay
+    for customer in get_seizure_customers(WAIT_FOR_CASHIER, True): 
+        customer = customers[customer]
+
+        customer.set_delay_process(CHECKING_OUT)
+
     # Delete customers that are done.
-    for customer in get_seizure_customers(WAIT_FOR_CASHIER, True):
+    for customer in get_delayed_customers(CHECKING_OUT):
         statistics['customersServed'] += 1
         del customers[customer]
 
